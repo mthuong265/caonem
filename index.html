@@ -3,62 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cào Nêm V4 - Tự Do</title>
+    <title>Cào Nêm V5 - Animation</title>
     <style>
-        :root { --card-w: 65px; --card-h: 90px; --bg-color: #2c3e50; --table-color: #27ae60; }
+        :root { --card-w: 65px; --card-h: 90px; --bg-color: #2c3e50; }
         body { font-family: 'Segoe UI', sans-serif; background: #1e272e; color: white; margin: 0; overflow: hidden; user-select: none; }
         
-        /* UI CHUNG */
-        .screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .btn { padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 14px; margin: 5px; transition: 0.2s; color: white;}
+        /* --- UI CORE --- */
+        .screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.3s; }
+        .btn { padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 14px; margin: 5px; transition: 0.2s; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         .btn:active { transform: scale(0.95); }
-        .btn:disabled { background: #7f8c8d !important; opacity: 0.7; cursor: not-allowed; }
+        .btn:disabled { background: #7f8c8d !important; opacity: 0.6; cursor: not-allowed; box-shadow: none; transform: none; }
         .btn-primary { background: #f1c40f; color: #2c3e50; }
         .btn-danger { background: #e74c3c; }
         .btn-info { background: #3498db; }
         .btn-success { background: #2ecc71; }
-        
         input { padding: 12px; border-radius: 8px; border: none; text-align: center; font-size: 16px; margin-bottom: 10px; width: 200px; outline: none; }
 
-        /* BÀN CHƠI */
+        /* --- TABLE & AREAS --- */
         .game-table { background: radial-gradient(circle, #2ecc71 10%, #145a32 90%); }
         
-        /* KHU VỰC ĐỐI THỦ (Top) */
         .top-area { position: absolute; top: 10px; width: 100%; display: flex; justify-content: center; gap: 20px; }
-        .opponent-hand { display: flex; gap: 5px; }
-        .mini-card { width: 40px; height: 56px; background: #e74c3c; border: 2px solid white; border-radius: 4px; }
+        .opponent-hand { display: flex; gap: 5px; min-height: 60px; }
+        .mini-card { width: 40px; height: 56px; background: #e74c3c; border: 2px solid white; border-radius: 4px; box-shadow: 1px 1px 3px rgba(0,0,0,0.3); }
         
-        /* KHU VỰC POOL (Middle) */
         .pool-area { 
             position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
             width: 90%; max-width: 500px; height: 160px; 
-            background: rgba(0,0,0,0.2); border-radius: 15px;
+            background: rgba(0,0,0,0.15); border-radius: 15px; border: 2px dashed rgba(255,255,255,0.2);
             display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 10px;
         }
-        .pool-msg { position: absolute; top: -30px; width: 100%; text-align: center; color: #f1c40f; font-weight: bold; text-shadow: 1px 1px 2px black;}
-
-        /* KHU VỰC TAY MÌNH (Bottom) */
-        .my-area { position: absolute; bottom: 20px; width: 100%; display: flex; flex-direction: column; align-items: center; }
-        .hand-wrapper { display: flex; gap: 15px; height: 100px; align-items: flex-end; margin-bottom: 10px; }
         
-        /* NÚT ĐIỀU KHIỂN */
-        .controls-bar { display: flex; gap: 10px; margin-bottom: 10px; }
+        .my-area { position: absolute; bottom: 20px; width: 100%; display: flex; flex-direction: column; align-items: center; }
+        .hand-wrapper { display: flex; gap: 15px; height: 100px; align-items: flex-end; margin-bottom: 10px; min-width: 240px; justify-content: center; }
+        .controls-bar { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; justify-content: center; }
 
-        /* LÁ BÀI */
+        /* --- CARD DESIGN --- */
         .card {
             width: var(--card-w); height: var(--card-h);
             background: white; border-radius: 6px;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             font-weight: bold; font-size: 24px; position: relative;
             box-shadow: 2px 2px 5px rgba(0,0,0,0.3); cursor: pointer;
-            transition: transform 0.2s;
+            transition: transform 0.2s, top 0.2s;
         }
         .card.red { color: #e74c3c; } .card.black { color: #2c3e50; }
         .card.selected { transform: translateY(-20px); border: 3px solid #f1c40f; box-shadow: 0 0 15px #f1c40f; }
         .card-back { background: repeating-linear-gradient(45deg, #c0392b, #c0392b 10px, #a93226 10px, #a93226 20px); border: 2px solid #fff; }
         .card-back span { display: none; }
 
-        /* KẾT QUẢ */
+        /* --- ANIMATION: DEALING --- */
+        /* Bộ bài ở giữa khi chia */
+        .deck-center {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: var(--card-w); height: var(--card-h);
+            background: #e74c3c; border: 3px solid white; border-radius: 6px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); z-index: 50;
+        }
+
+        /* Hiệu ứng bài bay từ giữa ra */
+        .fly-enter-active { animation: dealFly 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes dealFly {
+            0% { opacity: 0; transform: translate(0, -200px) scale(0.5); } /* Giả lập vị trí tương đối từ Deck */
+            100% { opacity: 1; transform: translate(0, 0) scale(1); }
+        }
+
+        /* --- RESULT --- */
         .result-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.9); z-index: 100;
@@ -66,14 +75,14 @@
         }
         .score-board { background: white; color: #333; padding: 20px; border-radius: 10px; width: 300px; }
         .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-        .ready-badge { background: #2ecc71; color: white; font-size: 10px; padding: 2px 5px; border-radius: 3px; margin-left: 5px; }
     </style>
 </head>
 <body>
     <div id="app">
         
         <div v-if="step === 'login'" class="screen" style="background: var(--bg-color);">
-            <h1 style="color:#f1c40f">Cào Nêm V4</h1>
+            <h1 style="color:#f1c40f">Cào Nêm V5</h1>
+            <p style="opacity: 0.7;">Phiên bản Animation & Chặt chẽ</p>
             <input v-model="myName" placeholder="Tên của bạn" maxlength="10">
             <button class="btn btn-primary" @click="createRoom" :disabled="!myName">Tạo Phòng</button>
             <div style="margin: 10px; opacity: 0.5;">--- hoặc ---</div>
@@ -83,7 +92,7 @@
 
         <div v-else-if="step === 'lobby'" class="screen" style="background: var(--bg-color);">
             <h2 style="color:#f1c40f; font-size: 40px; margin:0;">{{ roomId }}</h2>
-            <p>Chờ mọi người sẵn sàng...</p>
+            <p>Chờ đủ người và tất cả Sẵn Sàng...</p>
             
             <div style="width: 300px; margin-bottom: 20px;">
                 <div v-for="p in players" :key="p.id" style="background: rgba(255,255,255,0.1); padding: 10px; margin: 5px 0; border-radius: 5px; display: flex; justify-content: space-between;">
@@ -99,29 +108,29 @@
 
         <div v-else-if="step === 'game'" class="screen game-table">
             
+            <div v-if="isDealing" class="deck-center"></div>
+
             <div class="top-area">
                 <div v-for="p in opponents" :key="p.id" style="text-align: center;">
-                    <div style="font-size: 12px; margin-bottom: 5px;">
-                        {{ p.name }} 
-                        <span v-if="p.isLocked">🔒</span>
-                    </div>
+                    <div style="font-size: 12px; margin-bottom: 5px;">{{ p.name }} <span v-if="p.isLocked">🔒</span></div>
                     <div class="opponent-hand">
-                        <div v-for="n in (p.handCount || 3)" class="mini-card"></div>
+                        <transition-group name="fly">
+                            <div v-for="n in (p.handCount || 3)" :key="n" 
+                                 v-if="dealStep >= n"
+                                 class="mini-card">
+                            </div>
+                        </transition-group>
                     </div>
                 </div>
             </div>
 
             <div class="pool-area">
-                <div class="pool-msg">{{ statusText }}</div>
+                <div style="position: absolute; top: -30px; width: 100%; text-align: center; color: #f1c40f; font-weight: bold; text-shadow: 1px 1px 2px black;">{{ statusText }}</div>
+                <div v-if="pool.length === 0" style="opacity: 0.5; color: white; font-size: 12px;">(Sàn trống)</div>
                 
-                <div v-if="pool.length === 0" style="opacity: 0.5; color: white;">Sàn trống</div>
-                
-                <div v-for="(c, idx) in pool" :key="idx" 
+                <div v-for="(c, idx) in pool" :key="c.id || idx" 
                     class="card"
-                    :class="[
-                        isCardHidden(c) ? 'card-back' : getSuitColor(c),
-                        { 'selected': selectedPoolIdx === idx }
-                    ]"
+                    :class="[ isCardHidden(c) ? 'card-back' : getSuitColor(c), { 'selected': selectedPoolIdx === idx } ]"
                     @click="onPoolCardClick(idx)">
                     <span class="card-val">{{ c.val }}</span>
                     <span class="card-suit">{{ c.suit }}</span>
@@ -130,27 +139,35 @@
 
             <div class="my-area">
                 <div class="controls-bar">
-                    <button v-if="canDrop" class="btn btn-info" @click="actionDrop">⬇ Đẩy ra bàn</button>
+                    <button v-if="canDrop" class="btn btn-info" @click="actionDrop">⬇ Đẩy ra</button>
+                    <button v-if="canTake" class="btn btn-success" @click="actionTake">⬆ Lấy về</button>
+                    <button v-if="canSwap" class="btn btn-primary" @click="actionSwap">🔄 Đổi bài</button>
                     
-                    <button v-if="canTake" class="btn btn-success" @click="actionTake">⬆ Lấy lá này về</button>
-                    
-                    <button v-if="canSwap" class="btn btn-primary" @click="actionSwap">🔄 Đổi lá này</button>
-
-                    <button class="btn" :class="me.isLocked ? 'btn-danger' : 'btn-danger'" 
-                            @click="toggleLock" style="margin-left: 20px; border: 2px solid white;">
-                        {{ me.isLocked ? '🔓 Hủy Chốt' : '🛑 CHỐT BÀI' }}
+                    <button class="btn" 
+                        :class="me.isLocked ? 'btn-danger' : 'btn-danger'" 
+                        :disabled="myHand.length !== 3"
+                        @click="toggleLock" 
+                        style="margin-left: 20px; border: 2px solid white;">
+                        {{ me.isLocked ? '🔓 Hủy Chốt' : (myHand.length !== 3 ? '✋ Chưa đủ bài' : '🛑 CHỐT BÀI') }}
                     </button>
                 </div>
 
                 <div class="hand-wrapper">
-                    <div v-for="(c, idx) in myHand" :key="idx" 
-                        class="card"
-                        :class="[getSuitColor(c), { 'selected': selectedHandIdx === idx }]"
-                        @click="onHandCardClick(idx)">
-                        <span class="card-val">{{ c.val }}</span>
-                        <span class="card-suit">{{ c.suit }}</span>
+                    <transition-group name="fly">
+                        <div v-for="(c, idx) in myHand" :key="c.id || idx" 
+                            v-if="dealStep >= idx + 1"
+                            class="card"
+                            :class="[getSuitColor(c), { 'selected': selectedHandIdx === idx }]"
+                            @click="onHandCardClick(idx)">
+                            <span class="card-val">{{ c.val }}</span>
+                            <span class="card-suit">{{ c.suit }}</span>
+                        </div>
+                    </transition-group>
+
+                    <div v-if="myHand.length < 3 && dealStep >= 3" 
+                        style="width: var(--card-w); height: var(--card-h); border: 2px dashed rgba(255,255,255,0.3); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 30px;">
+                        +
                     </div>
-                    <div v-if="myHand.length < 3" style="width: var(--card-w); height: var(--card-h); border: 2px dashed rgba(255,255,255,0.3); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 30px; color: rgba(255,255,255,0.3);">+</div>
                 </div>
                 <div style="font-size: 12px;">{{ myName }}</div>
             </div>
@@ -162,26 +179,22 @@
                 <div v-for="p in players" class="row">
                     <div>
                         <strong>{{ p.name }}</strong>
-                        <div style="font-size: 12px; color: #666;">
-                            {{ p.hand ? p.hand.map(c => c.val).join(', ') : '' }}
-                        </div>
+                        <div style="font-size: 12px; color: #666;">{{ p.hand ? p.hand.map(c => c.val).join(', ') : '' }}</div>
                     </div>
-                    <div style="font-size: 20px; font-weight: bold; color: #27ae60;">
-                        {{ calculateScore(p.hand) }} điểm
-                    </div>
+                    <div style="font-size: 20px; font-weight: bold; color: #27ae60;">{{ calculateScore(p.hand) }} điểm</div>
                 </div>
-                <button class="btn btn-primary" style="width: 100%; margin-top: 15px;" @click="resetGame">Chơi Lại</button>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 15px;" @click="resetGame">Chơi Ván Mới</button>
             </div>
         </div>
-
     </div>
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, set, onValue, update, get, onDisconnect, remove } 
+        import { getDatabase, ref, set, onValue, update, get, onDisconnect } 
         from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
+        // Config từ project của bạn
         const config = {
             apiKey: "AIzaSyAfYIW3kg5BZxS9pbXny5JsQGv70VK0DiQ",
             authDomain: "caonem-5c040.firebaseapp.com",
@@ -195,7 +208,6 @@
 
         const app = initializeApp(config);
         const db = getDatabase(app);
-
         const SUITS = ['♥', '♦', '♣', '♠'];
         const VALS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
         const SCORES = {'A':1, '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, 'J':10, 'Q':10, 'K':10};
@@ -203,11 +215,14 @@
         Vue.createApp({
             data() {
                 return {
-                    step: 'login',
-                    myName: '', myId: '', roomId: '', joinId: '',
+                    step: 'login', myName: '', myId: '', roomId: '', joinId: '',
                     players: [],
                     gameState: { pool: [], status: 'lobby' },
-                    selectedHandIdx: null, selectedPoolIdx: null
+                    selectedHandIdx: null, selectedPoolIdx: null,
+                    
+                    // Biến Animation
+                    isDealing: false,
+                    dealStep: 0 // 0: chưa chia, 1: chia lá 1, 2: chia lá 2, 3: chia xong
                 }
             },
             computed: {
@@ -216,22 +231,27 @@
                 opponents() { return this.players.filter(p => p.id !== this.myId); },
                 pool() { return this.gameState.pool || []; },
                 
-                // --- LOGIC NÚT BẤM ---
-                // 1. DROP: Có đủ 3 bài + Chọn 1 lá trên tay
                 canDrop() { return this.myHand.length === 3 && this.selectedHandIdx !== null && this.selectedPoolIdx === null && !this.me.isLocked; },
-                
-                // 2. TAKE: Thiếu bài (dưới 3 lá) + Chọn 1 lá trên bàn
                 canTake() { return this.myHand.length < 3 && this.selectedPoolIdx !== null && !this.me.isLocked; },
-                
-                // 3. SWAP: Đủ bài + Chọn tay + Chọn bàn
                 canSwap() { return this.myHand.length === 3 && this.selectedHandIdx !== null && this.selectedPoolIdx !== null && !this.me.isLocked; },
 
                 statusText() {
-                    if (this.me.isLocked) return "Bạn đã Chốt. Đợi người khác...";
-                    if (this.myHand.length < 3) return "Hãy chọn bài trên bàn để lấy về!";
-                    if (this.selectedPoolIdx !== null) return "Chọn 1 lá trên tay để Đổi";
-                    if (this.selectedHandIdx !== null) return "Đẩy ra hoặc Đổi?";
+                    if (this.isDealing) return "Đang chia bài...";
+                    if (this.me.isLocked) return "Đã Chốt. Đợi kết quả...";
+                    if (this.myHand.length < 3) return "Thiếu bài! Chọn trên bàn để lấy về";
+                    if (this.selectedHandIdx !== null && this.selectedPoolIdx !== null) return "Bấm Đổi Bài để xác nhận";
+                    if (this.selectedHandIdx !== null) return "Đẩy ra bàn hay Đổi?";
                     return "Chọn bài để hành động";
+                }
+            },
+            watch: {
+                // Lắng nghe trạng thái game để kích hoạt Animation
+                'gameState.status'(newVal, oldVal) {
+                    if (newVal === 'playing' && oldVal === 'lobby') {
+                        this.runDealAnimation();
+                    } else if (newVal === 'lobby') {
+                        this.dealStep = 0; // Reset khi chơi lại
+                    }
                 }
             },
             methods: {
@@ -242,7 +262,18 @@
                     return hand.reduce((sum, c) => sum + SCORES[c.val], 0) % 10;
                 },
 
-                // KẾT NỐI
+                // LOGIC ANIMATION CHIA BÀI
+                runDealAnimation() {
+                    this.isDealing = true;
+                    this.dealStep = 0;
+                    
+                    // Lần lượt hiện bài sau mỗi khoảng thời gian
+                    setTimeout(() => { this.dealStep = 1; }, 500);
+                    setTimeout(() => { this.dealStep = 2; }, 1000);
+                    setTimeout(() => { this.dealStep = 3; this.isDealing = false; }, 1500);
+                },
+
+                // KẾT NỐI & LOGIC CHÍNH
                 async createRoom() {
                     this.myId = 'u' + Date.now();
                     this.roomId = Math.floor(1000 + Math.random() * 9000).toString();
@@ -252,7 +283,7 @@
                     this.myId = 'u' + Date.now();
                     this.roomId = this.joinId.trim();
                     const snap = await get(ref(db, `rooms/${this.roomId}`));
-                    if(!snap.exists()) return alert("Không tìm thấy phòng!");
+                    if(!snap.exists()) return alert("Phòng không tồn tại");
                     await this.joinDB();
                 },
                 async joinDB() {
@@ -266,36 +297,31 @@
                         this.gameState = data.state || { pool: [], status: 'lobby' };
                         this.players = data.players ? Object.values(data.players) : [];
                         
-                        // Chuyển màn hình
                         if (this.gameState.status === 'playing') this.step = 'game';
                         else if (this.gameState.status === 'finished') this.step = 'result';
                         else this.step = 'lobby';
 
-                        // AUTO START LOGIC: Nếu tất cả Ready và > 1 người
+                        // Auto Start (chỉ chạy ở máy người đầu tiên)
                         if (this.gameState.status === 'lobby' && this.players.length > 1 && this.players.every(p => p.isReady)) {
-                            // Chỉ người chơi đầu tiên trong list thực hiện việc chia bài (để tránh xung đột)
                             if (this.players[0].id === this.myId) this.dealCards();
                         }
-                        
-                        // AUTO END LOGIC: Nếu tất cả Locked
+                        // Auto End
                         if (this.gameState.status === 'playing' && this.players.every(p => p.isLocked)) {
                              if (this.players[0].id === this.myId) this.endGame();
                         }
                     });
                 },
-
                 async toggleReady() {
                     await update(ref(db), { [`rooms/${this.roomId}/players/${this.myId}/isReady`]: !this.me.isReady });
                 },
-
                 async dealCards() {
                     let deck = [];
                     SUITS.forEach(s => VALS.forEach(v => deck.push({ val: v, suit: s })));
                     deck.sort(() => Math.random() - 0.5);
-
                     const updates = {};
                     this.players.forEach(p => {
-                        const hand = [deck.pop(), deck.pop(), deck.pop()];
+                        // Thêm ID random cho mỗi lá bài để animation hoạt động mượt (Vue key)
+                        const hand = [deck.pop(), deck.pop(), deck.pop()].map(c => ({...c, id: Math.random()}));
                         updates[`rooms/${this.roomId}/players/${p.id}/hand`] = hand;
                         updates[`rooms/${this.roomId}/players/${p.id}/handCount`] = 3;
                         updates[`rooms/${this.roomId}/players/${p.id}/isLocked`] = false;
@@ -304,78 +330,53 @@
                     updates[`rooms/${this.roomId}/state/pool`] = [];
                     await update(ref(db), updates);
                 },
-
-                // --- ACTIONS ---
-                onHandCardClick(i) { if(!this.me.isLocked) this.selectedHandIdx = (this.selectedHandIdx===i ? null : i); },
-                onPoolCardClick(i) { if(!this.me.isLocked) this.selectedPoolIdx = (this.selectedPoolIdx===i ? null : i); },
-
+                async toggleLock() {
+                    // ĐIỀU KIỆN CHẶT CHẼ: Phải đủ 3 lá mới được chốt
+                    if (this.myHand.length !== 3) return; 
+                    await update(ref(db), { [`rooms/${this.roomId}/players/${this.myId}/isLocked`]: !this.me.isLocked });
+                },
                 async actionDrop() {
-                    const card = { ...this.myHand[this.selectedHandIdx], ownerId: this.myId }; // Gán chủ sở hữu để úp bài
-                    const newHand = [...this.myHand];
-                    newHand.splice(this.selectedHandIdx, 1);
-                    
+                    const card = { ...this.myHand[this.selectedHandIdx], ownerId: this.myId };
+                    const newHand = [...this.myHand]; newHand.splice(this.selectedHandIdx, 1);
                     const updates = {};
                     updates[`rooms/${this.roomId}/players/${this.myId}/hand`] = newHand;
                     updates[`rooms/${this.roomId}/players/${this.myId}/handCount`] = newHand.length;
                     updates[`rooms/${this.roomId}/state/pool`] = [...this.pool, card];
-                    
                     await update(ref(db), updates);
                     this.resetSelect();
                 },
-
                 async actionTake() {
-                    const card = this.pool[this.selectedPoolIdx];
-                    const newCard = { ...card }; delete newCard.ownerId; // Lấy về thì xóa owner để hiện bài
-                    
-                    const newHand = [...this.myHand, newCard];
-                    const newPool = [...this.pool];
-                    newPool.splice(this.selectedPoolIdx, 1);
-
+                    const card = { ...this.pool[this.selectedPoolIdx] }; delete card.ownerId;
+                    const newHand = [...this.myHand, card];
+                    const newPool = [...this.pool]; newPool.splice(this.selectedPoolIdx, 1);
                     const updates = {};
                     updates[`rooms/${this.roomId}/players/${this.myId}/hand`] = newHand;
                     updates[`rooms/${this.roomId}/players/${this.myId}/handCount`] = newHand.length;
                     updates[`rooms/${this.roomId}/state/pool`] = newPool;
-
                     await update(ref(db), updates);
                     this.resetSelect();
                 },
-
                 async actionSwap() {
                     const myCard = { ...this.myHand[this.selectedHandIdx], ownerId: this.myId };
                     const poolCard = { ...this.pool[this.selectedPoolIdx] }; delete poolCard.ownerId;
-
                     const newHand = [...this.myHand]; newHand[this.selectedHandIdx] = poolCard;
                     const newPool = [...this.pool]; newPool[this.selectedPoolIdx] = myCard;
-
                     const updates = {};
                     updates[`rooms/${this.roomId}/players/${this.myId}/hand`] = newHand;
                     updates[`rooms/${this.roomId}/state/pool`] = newPool;
-                    
                     await update(ref(db), updates);
                     this.resetSelect();
                 },
-
-                async toggleLock() {
-                    await update(ref(db), { [`rooms/${this.roomId}/players/${this.myId}/isLocked`]: !this.me.isLocked });
-                },
-
-                async endGame() {
-                    await update(ref(db), { [`rooms/${this.roomId}/state/status`]: 'finished' });
-                },
-
+                async endGame() { await update(ref(db), { [`rooms/${this.roomId}/state/status`]: 'finished' }); },
                 async resetGame() {
-                    await update(ref(db), { 
-                        [`rooms/${this.roomId}/state/status`]: 'lobby',
-                        [`rooms/${this.roomId}/state/pool`]: []
-                    });
-                    // Reset ready của tất cả
-                    this.players.forEach(p => {
-                        update(ref(db), { [`rooms/${this.roomId}/players/${p.id}/isReady`]: false });
-                    });
+                    await update(ref(db), { [`rooms/${this.roomId}/state/status`]: 'lobby', [`rooms/${this.roomId}/state/pool`]: [] });
+                    this.players.forEach(p => { update(ref(db), { [`rooms/${this.roomId}/players/${p.id}/isReady`]: false }); });
                 },
-
-                resetSelect() { this.selectedHandIdx = null; this.selectedPoolIdx = null; }
+                resetSelect() { this.selectedHandIdx = null; this.selectedPoolIdx = null; },
+                onHandCardClick(i) { if(!this.me.isLocked) this.selectedHandIdx = (this.selectedHandIdx===i ? null : i); },
+                onPoolCardClick(i) { if(!this.me.isLocked) this.selectedPoolIdx = (this.selectedPoolIdx===i ? null : i); },
             }
         }).mount('#app');
     </script>
 </body>
+</html>
