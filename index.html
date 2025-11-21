@@ -1,623 +1,412 @@
-<!--
-index.html — Bài Cào Nêm (Firebase Realtime) — Single file
-Run instructions:
-1. Save this file as index.html.
-2. Open it in a browser (or host on Vercel/Netlify). It will connect to Firebase Realtime DB.
-3. Use "Create Room" (host) or "Join Room" with same room code. Max 10 players.
-4. Host presses "Start Game" → game flow begins.
-
-Notes:
-- Firebase config already embedded (from the screenshot you provided).
-- This implementation follows your requested swap mechanic:
-  * All players reveal their 3 cards initially.
-  * Swap happens per-card: a player chooses one of their cards and "offers" it to the offer pool.
-  * After offering phase is locked (host or auto when everyone finished), players take turns picking any offered card. They may pick back their own offered card as well.
-  * Each pick performs a direct swap: the taker replaces the chosen slot in their hand (or choose a slot), and the offerer receives the taker's previously-offered card (or the taker's chosen slot card) — implemented as swapping the selected slot and the offered card.
-- This file uses Firebase Realtime Database in "test mode". It's not secure. Good for quick casual play.
-
-Uploaded image reference (for your records):
-/mnt/data/d3e0acc4-405b-4c8b-a9d9-eaaf4d6b59fd.png
--->
-
-<!doctype html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Bài Cào Nêm — Play (Firebase Realtime)</title>
-<style>
-  :root{
-    --bg:#071122; --card:#fff; --panel:#0b1622; --accent:#ff6b6b; --muted:#9fb3c8;
-  }
-  body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#04111a 0%, #071522 100%);color:#e8f2fb}
-  .container{max-width:1100px;margin:18px auto;padding:18px;}
-  header{display:flex;align-items:center;gap:12px}
-  h1{font-size:20px;margin:0}
-  .top-controls{margin-left:auto;display:flex;gap:8px;align-items:center}
-  .panel{background:linear-gradient(180deg,#081827,#081a22);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);}
-  input,select,button{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
-  .flex{display:flex;gap:12px;align-items:center}
-  #playersGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}
-  .playerCard{background:linear-gradient(180deg,#06202b,#07212b);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);min-height:120px;position:relative}
-  .name{font-weight:700}
-  .small{font-size:12px;color:var(--muted);margin-top:4px}
-  .cards{display:flex;gap:8px;margin-top:10px}
-  .card{width:56px;height:80px;border-radius:8px;background:var(--card);color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
-  .card.mask{background:linear-gradient(90deg,#0f2a3a,#043b2f);color:#fff}
-  .btn{cursor:pointer}
-  .log{height:120px;overflow:auto;background:#03151b;padding:8px;border-radius:8px;margin-top:12px;border:1px solid rgba(255,255,255,0.02)}
-  .controls{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
-  .highlight{outline:3px solid rgba(132,204,22,0.12);box-shadow:0 8px 28px rgba(132,204,22,0.06)}
-  .offer-badge{position:absolute;top:8px;right:8px;background:#ffd166;color:#000;padding:4px 6px;border-radius:6px;font-weight:700;font-size:12px}
-  .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.6)}
-  .modal-box{background:linear-gradient(180deg,#08222b,#04202a);padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);width:90%;max-width:640px}
-  .offers-grid{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  .offer-card{background:#fff;padding:8px;border-radius:8px;min-width:90px;text-align:center}
-  .loser{background:#3b0f11}
-  footer{margin-top:18px;color:var(--muted);font-size:13px}
-  .accent{color:var(--accent);font-weight:700}
-  .chip{background:#062b38;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.02);font-size:13px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Swap Game</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #2c3e50; color: white; text-align: center; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #e67e22; border: none; color: white; border-radius: 5px; margin: 5px; }
+        button:disabled { background: #95a5a6; cursor: not-allowed; }
+        input { padding: 10px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; }
+        .card { width: 60px; height: 90px; background: white; color: black; display: inline-flex; align-items: center; justify-content: center; margin: 5px; border-radius: 8px; font-weight: bold; cursor: pointer; border: 3px solid transparent; position: relative; }
+        .card.selected { border-color: #e74c3c; transform: translateY(-10px); }
+        .card.pool-card { background: #3498db; color: white; }
+        .card.pool-selected { border-color: #f1c40f; box-shadow: 0 0 10px #f1c40f; }
+        .game-area { margin-top: 20px; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 10px; }
+        .status-log { margin-bottom: 10px; font-style: italic; color: #f1c40f; }
+        .player-box { border: 1px solid #7f8c8d; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .turn-indicator { color: #2ecc71; font-weight: bold; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div>
-        <h1>Bài Cào Nêm — Play (Realtime)</h1>
-        <div class="small">Swap per-card pool — everyone reveals then offer & pick cards as group</div>
-      </div>
+    <div id="app" class="container">
+        <h1>🃏 Simple Card Swap</h1>
 
-      <div class="top-controls">
-        <input id="displayName" placeholder="Tên của bạn" value="Player" />
-        <input id="roomInput" placeholder="Room ID (6 ký tự)" style="width:120px" />
-        <button id="createBtn" class="btn">Create Room</button>
-        <button id="joinBtn" class="btn">Join Room</button>
-        <div class="chip" id="roomLabel">Not in room</div>
-      </div>
-    </header>
-
-    <section style="margin-top:12px" class="panel">
-      <div class="flex">
-        <div style="flex:1">
-          <div style="display:flex;gap:8px;align-items:center">
-            <button id="startBtn" class="btn">Start Game (host)</button>
-            <button id="offerDoneBtn" class="btn">I'm done offering</button>
-            <button id="lockOffersBtn" class="btn">Lock Offers (host)</button>
-            <button id="nextPickBtn" class="btn">Next Pick (host)</button>
-            <button id="endSwapAutoBtn" class="btn">Auto End Swap Check</button>
-            <div style="margin-left:12px" class="small">Mode: <span class="accent">per-card offers</span></div>
-          </div>
-
-          <div class="log" id="log"></div>
+        <div v-if="step === 'login'">
+            <input v-model="myName" placeholder="Nhập tên của bạn" />
+            <br><br>
+            <button @click="createRoom" :disabled="!myName">Tạo Phòng (Host)</button>
+            <div style="margin: 10px;">HOẶC</div>
+            <input v-model="joinId" placeholder="Nhập Room ID" />
+            <button @click="joinRoom" :disabled="!myName || !joinId">Vào Phòng</button>
+            <p v-if="loading">Đang kết nối...</p>
         </div>
 
-        <div style="width:320px">
-          <div class="small">Game state</div>
-          <div style="margin-top:8px">
-            <div><strong>State:</strong> <span id="stateLabel">LOBBY</span></div>
-            <div><strong>Turn:</strong> <span id="turnLabel">-</span></div>
-            <div style="margin-top:8px"><strong>Offers:</strong> <span id="offersCount">0</span></div>
-            <div style="margin-top:8px"><strong>Swap history:</strong></div>
-            <div id="swapHistory" class="small" style="max-height:120px;overflow:auto"></div>
-          </div>
+        <div v-else-if="step === 'lobby'">
+            <h2>Phòng: {{ roomId }}</h2>
+            <p>Gửi ID này cho bạn bè để họ tham gia.</p>
+            <div class="player-box">
+                <h3>Người chơi trong phòng:</h3>
+                <ul>
+                    <li v-for="p in players" :key="p.id">{{ p.name }} {{ p.id === myId ? '(Bạn)' : '' }} <span v-if="p.isHost">👑</span></li>
+                </ul>
+            </div>
+            <button v-if="isHost" @click="startGame" :disabled="players.length < 2">Bắt đầu Game</button>
+            <p v-else>Chờ chủ phòng bắt đầu...</p>
         </div>
-      </div>
-    </section>
 
-    <section style="margin-top:12px" class="panel">
-      <div id="playersGrid"></div>
-    </section>
+        <div v-else-if="step === 'game'">
+            <div class="status-log">{{ statusMessage }}</div>
 
-    <div id="modalRoot"></div>
+            <div class="game-area" v-if="gamePhase === 'picking'">
+                <h3>Pool (Bài chung)</h3>
+                <div>
+                    <div 
+                        v-for="(card, index) in pool" 
+                        class="card pool-card"
+                        :class="{ 'pool-selected': selectedPoolIndex === index }"
+                        @click="selectPoolCard(index)">
+                        {{ card }}
+                    </div>
+                </div>
+            </div>
 
-    <footer>Created for quick play — Firebase Realtime in test mode. Not secure. Max 10 players.</footer>
-  </div>
+            <div class="game-area">
+                <h3>Bài của bạn ({{ myName }})</h3>
+                <div v-if="myHand.length > 0">
+                    <div 
+                        v-for="(card, index) in myHand" 
+                        class="card" 
+                        :class="{ 'selected': selectedHandIndex === index }"
+                        @click="onHandCardClick(index)">
+                        {{ card }}
+                    </div>
+                </div>
+                
+                <div v-if="gamePhase === 'offering'">
+                    <p>Chọn 1 lá bài để Offer (Góp vào Pool)</p>
+                    <button @click="confirmOffer" :disabled="selectedHandIndex === null || hasOffered">
+                        {{ hasOffered ? "Đã Offer Xong" : "I'm done offering" }}
+                    </button>
+                </div>
 
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+                <div v-if="gamePhase === 'picking'">
+                    <div v-if="isMyTurn">
+                        <p class="turn-indicator">⚡ Tới lượt bạn! Chọn 1 lá từ Pool và 1 lá trên tay để đổi.</p>
+                        <button @click="confirmSwap" :disabled="selectedHandIndex === null || selectedPoolIndex === null">
+                            Đổi bài (Swap)
+                        </button>
+                    </div>
+                    <div v-else>
+                        <p>Đang đợi lượt của: <strong>{{ currentTurnName }}</strong></p>
+                    </div>
+                </div>
+            </div>
 
-  <script>
-  // ====== CONFIG - from your uploaded screenshot ======
-  const firebaseConfig = {
-    apiKey: "AIzaSyAFYIWk3G5BzXS9pbnxy5JsQGv7OVK0DiQ",
-    authDomain: "caonem-5c040.firebaseapp.com",
-    databaseURL: "https://caonem-5c040-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "caonem-5c040",
-    storageBucket: "caonem-5c040.appspot.com",
-    messagingSenderId: "1097973722396",
-    appId: "1:1097973722396:web:bb0b017146a7d974e31ed9",
-    measurementId: "G-EQTSX7902Z"
-  };
-  // ==================================================
+            <div v-if="isHost && gamePhase === 'offering'" style="margin-top: 20px; border-top: 1px solid white; padding-top:10px;">
+                <h3>Host Control</h3>
+                <p>Đã Offer: {{ offeredCount }} / {{ players.length }} người</p>
+                <button @click="hostLockOffers">Lock Offers & Start Picking</button>
+            </div>
+        </div>
+    </div>
 
-  // Initialize Firebase
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+    <script>
+        const { createApp } = Vue;
 
-  // Utility: deck and scoring
-  const SUITS = ['♠','♥','♦','♣'];
-  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-  function buildDeck(){
-    const d=[];
-    for(const r of RANKS) for(const s of SUITS) d.push(r+s);
-    return d;
-  }
-  function shuffle(deck){
-    for(let i=deck.length-1;i>0;i--){
-      const j=Math.floor(Math.random()*(i+1));
-      [deck[i],deck[j]]=[deck[j],deck[i]];
-    }
-  }
-  function cardValue(rank){
-    if(rank==='A') return 1;
-    if(['J','Q','K'].includes(rank)) return 10;
-    return parseInt(rank,10);
-  }
-  function scoreOfHand(cards){
-    const total = cards.reduce((s,c)=> {
-      const r = c.slice(0, c.length - (c.length>2?1:1)); // '10♠' -> '10'
-      // but our strings are like "10♠" or "A♠", so rank is c.slice(0,-1)
-      const rank = c.slice(0, -1);
-      return s + cardValue(rank);
-    },0);
-    return total % 10;
-  }
+        createApp({
+            data() {
+                return {
+                    step: 'login', // login, lobby, game
+                    loading: false,
+                    myName: '',
+                    myId: '',
+                    roomId: '',
+                    joinId: '',
+                    isHost: false,
+                    peer: null,
+                    conns: [], // Host lưu danh sách kết nối
+                    hostConn: null, // Client lưu kết nối tới Host
+                    
+                    // Game State (Đồng bộ từ Host)
+                    players: [], // {id, name, isHost}
+                    gamePhase: 'offering', // offering, picking
+                    pool: [],
+                    turnIndex: 0,
+                    
+                    // Local State (Riêng tư)
+                    myHand: [],
+                    selectedHandIndex: null,
+                    selectedPoolIndex: null,
+                    hasOffered: false,
+                    statusMessage: ''
+                }
+            },
+            computed: {
+                offeredCount() {
+                    return this.players.filter(p => p.hasOffered).length;
+                },
+                isMyTurn() {
+                    if (this.gamePhase !== 'picking' || this.players.length === 0) return false;
+                    return this.players[this.turnIndex].id === this.myId;
+                },
+                currentTurnName() {
+                    if (this.players.length === 0) return '';
+                    return this.players[this.turnIndex].name;
+                }
+            },
+            methods: {
+                // --- SETUP KẾT NỐI ---
+                initPeer(id = null) {
+                    return new Promise((resolve, reject) => {
+                        // Tạo Peer ID ngẫu nhiên ngắn gọn 1 chút cho dễ test
+                        const peerId = id || Math.random().toString(36).substr(2, 6).toUpperCase();
+                        this.peer = new Peer(peerId);
+                        
+                        this.peer.on('open', (id) => {
+                            this.myId = id;
+                            resolve(id);
+                        });
 
-  // Room state management helpers
-  function roomRef(rid){ return db.ref('rooms/' + rid); }
-  function playersRef(rid){ return db.ref('rooms/' + rid + '/players'); }
-  function handsRef(rid){ return db.ref('rooms/' + rid + '/hands'); }
-  function offersRef(rid){ return db.ref('rooms/' + rid + '/offers'); }
-  function metaRef(rid){ return db.ref('rooms/' + rid + '/meta'); }
-  function swapHistoryRef(rid){ return db.ref('rooms/' + rid + '/swapHistory'); }
+                        this.peer.on('connection', (conn) => {
+                            if (this.isHost) this.handleHostConnection(conn);
+                        });
 
-  // Local client state
-  let local = {
-    roomId: null,
-    name: 'Player',
-    myId: null,
-    stateSnapshot: null,
-    myHand: [],
-    amHost: false
-  };
+                        this.peer.on('error', (err) => {
+                            console.error(err);
+                            alert("Lỗi kết nối: " + err.type);
+                            this.loading = false;
+                        });
+                    });
+                },
 
-  // UI elements
-  const logEl = document.getElementById('log');
-  const playersGrid = document.getElementById('playersGrid');
-  const roomLabel = document.getElementById('roomLabel');
-  const stateLabel = document.getElementById('stateLabel');
-  const turnLabel = document.getElementById('turnLabel');
-  const offersCount = document.getElementById('offersCount');
-  const swapHistoryEl = document.getElementById('swapHistory');
+                async createRoom() {
+                    this.loading = true;
+                    this.isHost = true;
+                    await this.initPeer();
+                    this.roomId = this.myId;
+                    // Thêm chính mình vào danh sách
+                    this.players.push({ id: this.myId, name: this.myName, isHost: true, hasOffered: false });
+                    this.step = 'lobby';
+                    this.loading = false;
+                },
 
-  function log(msg){
-    const d = new Date().toLocaleTimeString();
-    logEl.innerHTML += `<div>[${d}] ${escapeHtml(msg)}</div>`;
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-  function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+                async joinRoom() {
+                    this.loading = true;
+                    this.isHost = false;
+                    await this.initPeer(); // Client tự có ID riêng
+                    
+                    // Kết nối tới Host
+                    const conn = this.peer.connect(this.joinId);
+                    
+                    conn.on('open', () => {
+                        this.hostConn = conn;
+                        this.roomId = this.joinId;
+                        
+                        // Gửi thông tin đăng ký
+                        conn.send({ type: 'JOIN', name: this.myName });
 
-  // Create Room
-  document.getElementById('createBtn').addEventListener('click', async ()=>{
-    const rid = (Math.random().toString(36).slice(2,8)).toUpperCase();
-    await joinRoomAsHost(rid);
-  });
+                        // Lắng nghe data từ Host
+                        conn.on('data', (data) => {
+                            this.handleClientData(data);
+                        });
+                    });
 
-  // Join Room
-  document.getElementById('joinBtn').addEventListener('click', async ()=>{
-    const rid = document.getElementById('roomInput').value.trim().toUpperCase();
-    if(!rid){ alert('Nhập mã phòng'); return; }
-    await joinRoom(rid);
-  });
+                    conn.on('error', () => { alert("Không tìm thấy phòng!"); this.loading = false; });
+                },
 
-  async function joinRoomAsHost(rid){
-    local.name = document.getElementById('displayName').value || 'Host';
-    local.myId = 'p_' + Math.random().toString(36).slice(2,8);
-    local.roomId = rid;
-    local.amHost = true;
-    roomLabel.innerText = rid;
-    // create room skeleton
-    await roomRef(rid).set({
-      meta: {state:'LOBBY', hostId: local.myId, createdAt: Date.now()},
-      players: {[local.myId]: {id: local.myId, name: local.name}},
-      hands: {},
-      offers: {},
-      swapHistory: {}
-    });
-    attachRoomListeners(rid);
-    log('Created room ' + rid + ' as host.');
-  }
+                // --- HOST LOGIC (Xử lý Server) ---
+                handleHostConnection(conn) {
+                    this.conns.push(conn);
+                    
+                    conn.on('data', (data) => {
+                        // Xử lý các hành động từ Client gửi lên
+                        switch(data.type) {
+                            case 'JOIN':
+                                this.players.push({ id: conn.peer, name: data.name, isHost: false, hasOffered: false });
+                                this.broadcastState();
+                                break;
+                            case 'OFFER_CARD':
+                                // Lưu tạm lá bài client offer (chưa đưa vào pool ngay)
+                                const pOffer = this.players.find(p => p.id === conn.peer);
+                                if(pOffer) {
+                                    pOffer.tempOffer = data.card;
+                                    pOffer.hasOffered = true;
+                                }
+                                this.broadcastState();
+                                break;
+                            case 'SWAP_CARD':
+                                if (this.players[this.turnIndex].id === conn.peer) {
+                                    this.processSwap(conn.peer, data.poolIdx, data.handCard);
+                                }
+                                break;
+                        }
+                    });
 
-  async function joinRoom(rid){
-    local.name = document.getElementById('displayName').value || 'Player';
-    local.myId = 'p_' + Math.random().toString(36).slice(2,8);
-    local.roomId = rid;
-    local.amHost = false;
-    roomLabel.innerText = rid;
-    // push to players list
-    const pRef = playersRef(rid + '/' + local.myId);
-    await pRef.set({id: local.myId, name: local.name});
-    attachRoomListeners(rid);
-    log('Joined room ' + rid);
-  }
+                    conn.on('close', () => {
+                        this.players = this.players.filter(p => p.id !== conn.peer);
+                        this.broadcastState();
+                    });
+                },
 
-  function attachRoomListeners(rid){
-    // detach old listeners if any
-    if(local.roomListener) local.roomListener.off();
-    local.roomListener = roomRef(rid);
-    local.roomListener.on('value', (snap)=>{
-      const val = snap.val();
-      local.stateSnapshot = val;
-      renderState();
-    });
-  }
+                broadcastState() {
+                    // Dữ liệu gửi cho TẤT CẢ (Public state)
+                    const publicState = {
+                        type: 'UPDATE_STATE',
+                        step: this.step,
+                        players: this.players.map(p => ({ id: p.id, name: p.name, isHost: p.isHost, hasOffered: p.hasOffered })),
+                        gamePhase: this.gamePhase,
+                        pool: this.pool,
+                        turnIndex: this.turnIndex
+                    };
 
-  // Host starts game: shuffle & deal
-  document.getElementById('startBtn').addEventListener('click', async ()=>{
-    if(!local.roomId) return alert('Chưa vào phòng');
-    if(!local.amHost) return alert('Chỉ host được start');
-    const rid = local.roomId;
-    // fetch players once
-    const roomSnap = await roomRef(rid).get();
-    const room = roomSnap.val();
-    if(!room || !room.players) return alert('Room empty');
-    const playerIds = Object.keys(room.players);
-    if(playerIds.length < 2) return alert('Cần ít nhất 2 người');
-    // build deck & deal
-    const deck = buildDeck();
-    shuffle(deck);
-    const hands = {};
-    for(const pid of playerIds){
-      hands[pid] = [deck.pop(), deck.pop(), deck.pop()];
-    }
-    // set hands & meta
-    await roomRef(rid + '/hands').set(hands);
-    await metaRef(rid).set({state:'OFFER_PHASE', hostId: local.myId, turnOrder: playerIds, turnIndex: 0, offersLocked: false});
-    await offersRef(rid).set(null); // clear offers
-    await swapHistoryRef(rid).set(null);
-    log('Game started; cards dealt and revealed. OFFER_PHASE begins.');
-  });
+                    // Gửi cho từng client
+                    this.conns.forEach(conn => conn.send(publicState));
+                    
+                    // Host tự cập nhật UI của mình (vì host không nhận data qua mạng)
+                    // Host logic chạy trực tiếp trên biến data của Vue, nên không cần làm gì thêm với public data
+                    // NHƯNG cần cập nhật các biến local nếu cần. Ở đây ta dùng chung data.
+                },
 
-  // Player offers a card: choose slot index 0-2
-  // UI will call offerCard(slotIndex)
-  async function offerCard(slotIndex){
-    if(!local.roomId) return;
-    const rid = local.roomId;
-    const metaSnap = await metaRef(rid).get();
-    const meta = metaSnap.val();
-    if(!meta || meta.state !== 'OFFER_PHASE') return alert('Không trong giai đoạn offer');
-    // read current hand
-    const handSnap = await handsRef(rid + '/' + local.myId).get();
-    const hand = handSnap.val();
-    if(!hand || !hand[slotIndex]) return alert('Slot trống');
-    const offerObj = {from: local.myId, slot: slotIndex, card: hand[slotIndex], ts: Date.now()};
-    // push to offers path using push()
-    await offersRef(rid).push(offerObj);
-    // mark locally that this slot is offered by writing an offeredSlots map under players
-    const offeredSlotsRef = db.ref('rooms/' + rid + '/offeredSlots/' + local.myId + '/' + slotIndex);
-    await offeredSlotsRef.set(true);
-    log(`${local.name} offered card in slot ${slotIndex+1}: ${offerObj.card}`);
-  }
+                broadcastHand(playerId, hand) {
+                    if (playerId === this.myId) {
+                        this.myHand = hand;
+                    } else {
+                        const conn = this.conns.find(c => c.peer === playerId);
+                        if (conn) conn.send({ type: 'YOUR_HAND', hand: hand });
+                    }
+                },
 
-  // Player marks done offering
-  document.getElementById('offerDoneBtn').addEventListener('click', async ()=>{
-    if(!local.roomId) return;
-    const rid = local.roomId;
-    await db.ref('rooms/' + rid + '/offerDone/' + local.myId).set(true);
-    log('I marked done offering.');
-  });
+                startGame() {
+                    // Chia bài
+                    const deck = ['A','2','3','4','5','6','7','8','9','10','J','Q','K', 'A','2','3','4','5','6','7','8','9','10','J','Q','K']; // Deck đơn giản
+                    
+                    this.players.forEach(p => {
+                        const hand = [];
+                        for(let i=0; i<3; i++) {
+                            const rand = Math.floor(Math.random() * deck.length);
+                            hand.push(deck[rand]);
+                        }
+                        this.broadcastHand(p.id, hand);
+                        p.hasOffered = false;
+                        p.tempOffer = null;
+                    });
 
-  // Host locks offers to start pick phase
-  document.getElementById('lockOffersBtn').addEventListener('click', async ()=>{
-    if(!local.amHost) return alert('Chỉ host có quyền');
-    if(!local.roomId) return;
-    const rid = local.roomId;
-    await metaRef(rid).child('offersLocked').set(true);
-    await metaRef(rid).child('state').set('PICK_PHASE');
-    log('Host locked offers. PICK_PHASE begins.');
-    // reset turnIndex to 0 (start picks in turn order)
-    const metaSnap = await metaRef(rid).get();
-    const meta = metaSnap.val();
-    if(meta && meta.turnOrder) await metaRef(rid).child('turnIndex').set(0);
-  });
+                    this.gamePhase = 'offering';
+                    this.step = 'game';
+                    this.statusMessage = "Mọi người hãy chọn 1 lá bài để Offer!";
+                    this.broadcastState();
+                },
 
-  // Host can advance to next pick (if needed)
-  document.getElementById('nextPickBtn').addEventListener('click', async ()=>{
-    if(!local.amHost) return alert('Chỉ host');
-    const rid = local.roomId;
-    const metaSnap = await metaRef(rid).get();
-    const meta = metaSnap.val();
-    if(!meta || !meta.turnOrder) return;
-    const next = (meta.turnIndex + 1) % meta.turnOrder.length;
-    await metaRef(rid).child('turnIndex').set(next);
-    log('Advanced pick turn to ' + meta.turnOrder[next]);
-  });
+                hostLockOffers() {
+                    // Gom bài offer vào Pool
+                    this.players.forEach(p => {
+                        if(p.tempOffer) {
+                            this.pool.push(p.tempOffer);
+                            p.tempOffer = null; // Clear temp
+                            
+                            // Cần xóa lá bài đó khỏi tay người chơi (Logic này Host phải quản lý hoặc tin tưởng Client)
+                            // Để đơn giản: Host đã nhận "giá trị" lá bài, Client tự xóa hiển thị. 
+                            // Đúng ra Host nên giữ 'Server Authoritative' toàn bộ Hand, nhưng để code ngắn gọn, ta xử lý bán tin cậy.
+                        }
+                    });
+                    
+                    this.gamePhase = 'picking';
+                    this.turnIndex = 0;
+                    this.statusMessage = "Đã khóa Offer! Bắt đầu lượt Pick.";
+                    this.broadcastState();
+                },
 
-  // Auto end swap check (optional)
-  document.getElementById('endSwapAutoBtn').addEventListener('click', async ()=>{
-    if(!local.roomId) return;
-    const rid = local.roomId;
-    const metaSnap = await metaRef(rid).get();
-    const meta = metaSnap.val();
-    if(meta && meta.state === 'PICK_PHASE'){
-      // If no offers left -> go to SHOWDOWN
-      const offersSnap = await offersRef(rid).get();
-      if(!offersSnap.exists()){
-        await metaRef(rid).child('state').set('SHOWDOWN');
-        log('No offers left. Moving to SHOWDOWN.');
-        revealAndCompute();
-      } else log('Offers exist. Not ending.');
-    } else {
-      log('Not in pick phase.');
-    }
-  });
+                processSwap(playerId, poolIdx, handCard) {
+                    // Host thực hiện logic đổi bài
+                    const cardFromPool = this.pool[poolIdx];
+                    
+                    // Cập nhật Pool: Thay lá từ pool bằng lá từ tay người chơi trả lại
+                    this.pool[poolIdx] = handCard;
+                    
+                    // Gửi lá bài mới về cho người chơi
+                    // Người chơi tự cập nhật UI tay mình, Host chỉ cần confirm state
+                    
+                    // Chuyển lượt
+                    this.turnIndex = (this.turnIndex + 1) % this.players.length;
+                    this.broadcastState();
 
-  // Picking an offer: pickOffer(offerKey, targetSlotIndex)
-  async function pickOffer(offerKey, targetSlotIndex){
-    if(!local.roomId) return;
-    const rid = local.roomId;
-    const metaSnap = await metaRef(rid).get();
-    const meta = metaSnap.val();
-    if(!meta || meta.state !== 'PICK_PHASE') return alert('Không trong PICK_PHASE');
-    // check turn
-    const turnOrder = meta.turnOrder || [];
-    const currentPid = turnOrder ? turnOrder[meta.turnIndex] : null;
-    if(currentPid !== local.myId) return alert('Chưa tới lượt bạn pick');
-    // perform transactional swap:
-    const offerRef = db.ref('rooms/' + rid + '/offers/' + offerKey);
-    await offerRef.transaction((currentOffer) => {
-      if(currentOffer === null) return; // already taken
-      // mark as taken by writing a taker field (we will finalize below)
-      currentOffer.takenBy = local.myId;
-      currentOffer.takenAt = Date.now();
-      return currentOffer;
-    }, async (err, committed, snapshot) => {
-      if(err) { alert('Transaction error'); return; }
-      if(!committed) { alert('Offer already taken'); return; }
-      const offer = snapshot.val();
-      // Now we execute swap of cards between offer.from(slot) and taker's chosen slot
-      // We'll read both hands and swap values
-      const handPathA = 'rooms/' + rid + '/hands/' + offer.from + '/' + offer.slot;
-      const handPathB = 'rooms/' + rid + '/hands/' + local.myId + '/' + targetSlotIndex;
-      // read both
-      const [snapA, snapB] = await Promise.all([ db.ref(handPathA).get(), db.ref(handPathB).get() ]);
-      const Acard = snapA.val();
-      const Bcard = snapB.val();
-      if(!Acard || !Bcard){
-        alert('Slot invalid for swap');
-        // revert: remove takenBy and restore by deleting offer
-        await db.ref('rooms/' + rid + '/offers/' + offerKey).remove();
-        return;
-      }
-      // write swapped values
-      const updates = {};
-      updates[handPathA] = Bcard;
-      updates[handPathB] = Acard;
-      // also remove offeredSlots map entry
-      updates['rooms/' + rid + '/offeredSlots/' + offer.from + '/' + offer.slot] = null;
-      updates['rooms/' + rid + '/offers/' + offerKey] = null; // remove offer
-      // append swap history
-      const histRef = db.ref('rooms/' + rid + '/swapHistory').push();
-      updates[histRef.path.toString().replace(/^\/|^\//, '')] = {from: offer.from, to: local.myId, fromSlot: offer.slot, toSlot: targetSlotIndex, ts: Date.now()};
-      await db.ref().update(updates);
-      log(`${local.name} picked offer from ${offer.from} (card ${Acard}) and swapped with my slot ${targetSlotIndex+1} (${Bcard}).`);
-      // advance turn
-      const metaRefLocal = metaRef(rid);
-      await metaRefLocal.transaction((m) => {
-        if(!m) return m;
-        m.turnIndex = (m.turnIndex + 1) % (m.turnOrder ? m.turnOrder.length : 1);
-        return m;
-      });
-    });
-  }
+                    // Gửi tin nhắn riêng cho người chơi để họ cập nhật Hand chính thức (swap thành công)
+                    if(playerId === this.myId) {
+                        this.handleSwapSuccess(cardFromPool);
+                    } else {
+                        const conn = this.conns.find(c => c.peer === playerId);
+                        if(conn) conn.send({ type: 'SWAP_SUCCESS', newCard: cardFromPool });
+                    }
+                },
 
-  // Reveal & compute showdown
-  async function revealAndCompute(){
-    if(!local.roomId) return;
-    const rid = local.roomId;
-    const handsSnap = await handsRef(rid).get();
-    const hands = handsSnap.val() || {};
-    const playersSnap = await playersRef(rid).get();
-    const players = playersSnap.val() || {};
-    const results = [];
-    for(const pid in players){
-      const hand = (hands[pid] && hands[pid].slice()) || [null,null,null];
-      const score = hand.every(Boolean) ? scoreOfHand(hand) : null;
-      results.push({id: pid, name: players[pid].name, hand, score});
-    }
-    // determine minimum (lowest) non-null score
-    const validResults = results.filter(r=>r.score !== null);
-    let minScore = Infinity;
-    for(const r of validResults) if(r.score < minScore) minScore = r.score;
-    const losers = validResults.filter(r=>r.score === minScore).map(r=>r.id);
-    // write meta state
-    await metaRef(rid).child('state').set('SHOWDOWN');
-    await metaRef(rid).child('showdown').set({results, losers});
-    // display modal locally (all clients will see same data via listener)
-    log('SHOWDOWN: scores computed.');
-  }
+                // --- CLIENT LOGIC ---
+                handleClientData(data) {
+                    if (data.type === 'UPDATE_STATE') {
+                        this.players = data.players;
+                        this.gamePhase = data.gamePhase;
+                        this.pool = data.pool;
+                        this.turnIndex = data.turnIndex;
+                        if(data.step) this.step = data.step;
+                        this.loading = false;
+                    } 
+                    else if (data.type === 'YOUR_HAND') {
+                        this.myHand = data.hand;
+                        this.hasOffered = false;
+                        this.selectedHandIndex = null;
+                    }
+                    else if (data.type === 'SWAP_SUCCESS') {
+                        this.handleSwapSuccess(data.newCard);
+                    }
+                },
 
-  // listen snapshot render
-  function renderState(){
-    const snap = local.stateSnapshot || {};
-    const meta = (snap.meta) || {};
-    const players = (snap.players) || {};
-    const hands = (snap.hands) || {};
-    const offers = (snap.offers) || {};
-    const swapHistory = (snap.swapHistory) || {};
-    // state labels
-    const state = meta.state || 'LOBBY';
-    stateLabel.innerText = state;
-    // turn label
-    let turnDesc = '-';
-    if(meta && meta.turnOrder && typeof meta.turnIndex === 'number'){
-      const pid = meta.turnOrder[meta.turnIndex];
-      turnDesc = (snap.players && snap.players[pid]) ? snap.players[pid].name : pid;
-    }
-    turnLabel.innerText = turnDesc;
-    // offers count
-    offersCount.innerText = (offers ? Object.keys(offers).length : 0);
-    // swap history
-    swapHistoryEl.innerHTML = '';
-    if(swapHistory) {
-      const keys = Object.keys(swapHistory).slice(-20);
-      for(const k of keys){
-        const e = swapHistory[k];
-        swapHistoryEl.innerHTML += `<div class="small">${e.from}→${e.to} (${e.fromSlot+1}-${e.toSlot+1})</div>`;
-      }
-    }
-    // render players grid
-    playersGrid.innerHTML = '';
-    const pIds = Object.keys(players || {});
-    for(const pid of pIds){
-      const p = players[pid];
-      const cardArray = hands[pid] || [null,null,null];
-      const pc = document.createElement('div');
-      pc.className = 'playerCard panel';
-      if(pid === local.myId) pc.classList.add('highlight');
-      let html = `<div class="name">${escapeHtml(p.name)}</div>`;
-      html += `<div class="small">id: ${pid}</div>`;
-      html += `<div class="cards">`;
-      for(let i=0;i<3;i++){
-        const c = cardArray[i];
-        // check if this slot is currently offered
-        const offered = (snap.offeredSlots && snap.offeredSlots[pid] && snap.offeredSlots[pid][i]) ? true : false;
-        html += `<div class="card ${offered? 'mask':''}" data-slot="${i}" data-pid="${pid}">${c? escapeHtml(c) : ''}</div>`;
-      }
-      html += `</div>`;
-      // show if this player has offered cards
-      if(snap.offeredSlots && snap.offeredSlots[pid]){
-        const offeredCount = Object.keys(snap.offeredSlots[pid]||{}).length;
-        if(offeredCount>0) html += `<div class="offer-badge">${offeredCount} offered</div>`;
-      }
-      pc.innerHTML = html;
-      // if this is my card area, attach click handlers to offer
-      if(pid === local.myId && meta.state === 'OFFER_PHASE'){
-        pc.querySelectorAll('.card').forEach(el=>{
-          el.style.cursor = 'pointer';
-          el.onclick = async ()=> {
-            const idx = parseInt(el.getAttribute('data-slot'));
-            // confirm offer
-            if(confirm('Offer this card (slot '+(idx+1)+')?')) await offerCard(idx);
-          };
+                // --- GAMEPLAY UI ACTIONS ---
+                onHandCardClick(index) {
+                    this.selectedHandIndex = index;
+                },
+                
+                selectPoolCard(index) {
+                    if(this.gamePhase === 'picking' && this.isMyTurn) {
+                        this.selectedPoolIndex = index;
+                    }
+                },
+
+                confirmOffer() {
+                    if (this.selectedHandIndex === null) return;
+                    const card = this.myHand[this.selectedHandIndex];
+                    
+                    // Gửi lên Host
+                    if (this.isHost) {
+                        const me = this.players.find(p => p.id === this.myId);
+                        me.tempOffer = card;
+                        me.hasOffered = true;
+                        this.broadcastState();
+                    } else {
+                        this.hostConn.send({ type: 'OFFER_CARD', card: card });
+                    }
+
+                    // Xóa khỏi tay mình (UI)
+                    this.myHand.splice(this.selectedHandIndex, 1);
+                    this.hasOffered = true;
+                    this.selectedHandIndex = null;
+                },
+
+                confirmSwap() {
+                    const cardToGive = this.myHand[this.selectedHandIndex];
+                    
+                    if (this.isHost) {
+                        this.processSwap(this.myId, this.selectedPoolIndex, cardToGive);
+                    } else {
+                        this.hostConn.send({ 
+                            type: 'SWAP_CARD', 
+                            poolIdx: this.selectedPoolIndex, 
+                            handCard: cardToGive 
+                        });
+                    }
+                },
+
+                handleSwapSuccess(newCard) {
+                    // Thay thế lá bài trên tay (lá cũ đã gửi đi, giờ nhận lá mới vào vị trí đó)
+                    this.myHand[this.selectedHandIndex] = newCard;
+                    this.selectedHandIndex = null;
+                    this.selectedPoolIndex = null;
+                }
+            }
         });
-      }
-      // if pick phase and offers exist, make offers selectable from modal (below)
-      playersGrid.appendChild(pc);
-    }
-
-    // If showdown data exists -> show modal
-    if(meta.showdown){
-      showShowdownModal(meta.showdown);
-    }
-
-    // Render offers area as small section in header: clickable to pick
-    renderOffersPanel(snap);
-  }
-
-  // Render offers panel (small overlay modal to pick)
-  function renderOffersPanel(snap){
-    // if no offers or not pick phase -> remove existing offers UI
-    const offers = snap.offers || {};
-    const meta = snap.meta || {};
-    const modalRoot = document.getElementById('modalRoot');
-    // remove previous offers modal if any
-    const existing = document.getElementById('offersModal');
-    if(existing) existing.remove();
-    if(Object.keys(offers).length === 0) return;
-    if(meta.state !== 'PICK_PHASE') return; // only show while picking
-    // Build offers modal with clickable offers; each offer entry has a key
-    const modal = document.createElement('div');
-    modal.id = 'offersModal';
-    modal.className = 'modal';
-    const box = document.createElement('div');
-    box.className = 'modal-box';
-    let html = `<h3>Available Offers</h3><div class="offers-grid">`;
-    for(const k of Object.keys(offers)){
-      const of = offers[k];
-      // if already taken skip
-      if(of.takenBy) continue;
-      html += `<div class="offer-card" data-key="${k}"><div><strong>From:</strong> ${escapeHtml(of.from)}</div><div class="small">slot ${of.slot+1}</div><div style="margin-top:6px" class="card">${escapeHtml(of.card)}</div><div style="margin-top:6px"><button class="pickBtn" data-key="${k}">Pick</button></div></div>`;
-    }
-    html += `</div><div style="margin-top:10px"><button id="closeOffers">Close</button></div>`;
-    box.innerHTML = html;
-    modal.appendChild(box);
-    modalRoot.appendChild(modal);
-    document.getElementById('closeOffers').onclick = ()=> modal.remove();
-    // attach pick handlers (for current player's turn only)
-    box.querySelectorAll('.pickBtn').forEach(b=>{
-      b.onclick = async (e)=>{
-        const key = b.getAttribute('data-key');
-        // ask which slot to replace in my hand
-        const slot = parseInt(prompt('Which slot in your hand to swap into? (1-3)', '1')) - 1;
-        if(isNaN(slot) || slot < 0 || slot > 2) return alert('Invalid slot');
-        await pickOffer(key, slot);
-        // close modal after pick (host will advance turn)
-        modal.remove();
-      };
-    });
-  }
-
-  // Show showdown modal
-  function showShowdownModal(showdown){
-    const root = document.getElementById('modalRoot');
-    // remove previous
-    const prev = document.getElementById('showdownModal');
-    if(prev) prev.remove();
-    const modal = document.createElement('div');
-    modal.id = 'showdownModal';
-    modal.className = 'modal';
-    const box = document.createElement('div');
-    box.className = 'modal-box';
-    let html = `<h3>SHOWDOWN</h3><div>`;
-    for(const r of showdown.results){
-      const isLoser = showdown.losers.includes(r.id);
-      html += `<div style="padding:8px;border-radius:8px;margin-bottom:6px;background:${isLoser? '#5b1011':'#07222a'}">`;
-      html += `<div style="font-weight:700">${escapeHtml(r.name)} ${isLoser? '(LOSER)':''}</div>`;
-      html += `<div class="small">Hand: ${r.hand.map(c=>c||'--').join(' | ')} — score: ${r.score}</div>`;
-      html += `</div>`;
-    }
-    html += `</div><div style="margin-top:12px"><button id="closeShow">Close</button> <button id="playAgainBtn">Play Again (Host)</button></div>`;
-    box.innerHTML = html;
-    modal.appendChild(box);
-    root.appendChild(modal);
-    document.getElementById('closeShow').onclick = ()=> modal.remove();
-    document.getElementById('playAgainBtn').onclick = async ()=>{
-      if(!local.amHost) return alert('Chỉ host');
-      // reset hands/offers and start a new round with the same players
-      const rid = local.roomId;
-      const players = Object.keys(local.stateSnapshot.players || {});
-      const deck = buildDeck();
-      shuffle(deck);
-      const hands={};
-      for(const pid of players) hands[pid] = [deck.pop(),deck.pop(),deck.pop()];
-      await roomRef(rid + '/hands').set(hands);
-      await metaRef(rid).update({state:'OFFER_PHASE', offersLocked:false, turnOrder: players, turnIndex: 0, showdown: null});
-      await offersRef(rid).set(null);
-      await db.ref('rooms/' + rid + '/offeredSlots').set(null);
-      await swapHistoryRef(rid).set(null);
-      modal.remove();
-      log('New round started by host.');
-    };
-  }
-
-  // safety: when page unloads, remove self from players list to avoid stale players
-  window.addEventListener('beforeunload', async ()=>{
-    if(local.roomId && local.myId){
-      await db.ref('rooms/' + local.roomId + '/players/' + local.myId).remove().catch(()=>{});
-    }
-  });
-
-  // initial UI
-  log('Ready. Enter name & create or join a room.');
-
-  </script>
+    </script>
 </body>
 </html>
-
-
-
-
-
-
