@@ -3,57 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Card Swap Game</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <title>Caonem Card Game (Firebase)</title>
+    
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #2c3e50; color: white; text-align: center; padding: 20px; }
         .container { max-width: 800px; margin: 0 auto; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #e67e22; border: none; color: white; border-radius: 5px; margin: 5px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #e67e22; border: none; color: white; border-radius: 5px; margin: 5px; transition: 0.2s;}
+        button:hover { background: #d35400; }
         button:disabled { background: #95a5a6; cursor: not-allowed; }
-        input { padding: 10px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; }
-        .card { width: 60px; height: 90px; background: white; color: black; display: inline-flex; align-items: center; justify-content: center; margin: 5px; border-radius: 8px; font-weight: bold; cursor: pointer; border: 3px solid transparent; position: relative; }
+        input { padding: 10px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; color: #333; }
+        .card { width: 60px; height: 90px; background: white; color: black; display: inline-flex; align-items: center; justify-content: center; margin: 5px; border-radius: 8px; font-weight: bold; cursor: pointer; border: 3px solid transparent; position: relative; user-select: none; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
         .card.selected { border-color: #e74c3c; transform: translateY(-10px); }
         .card.pool-card { background: #3498db; color: white; }
-        .card.pool-selected { border-color: #f1c40f; box-shadow: 0 0 10px #f1c40f; }
+        .card.pool-selected { border-color: #f1c40f; box-shadow: 0 0 15px #f1c40f; }
         .game-area { margin-top: 20px; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 10px; }
-        .status-log { margin-bottom: 10px; font-style: italic; color: #f1c40f; }
-        .player-box { border: 1px solid #7f8c8d; padding: 10px; margin: 10px 0; border-radius: 5px; }
-        .turn-indicator { color: #2ecc71; font-weight: bold; }
+        .status-log { margin-bottom: 10px; font-style: italic; color: #f1c40f; min-height: 24px; }
+        .player-box { border: 1px solid #7f8c8d; padding: 10px; margin: 10px 0; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .turn-indicator { color: #2ecc71; font-weight: bold; font-size: 1.2em; animation: blink 1s infinite alternate; }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.6; } }
+        .me-badge { background: #27ae60; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 5px; }
     </style>
 </head>
 <body>
     <div id="app" class="container">
-        <h1>🃏 Simple Card Swap</h1>
+        <h1>🃏 Cào Nêm (Firebase Ver)</h1>
 
         <div v-if="step === 'login'">
-            <input v-model="myName" placeholder="Nhập tên của bạn" />
+            <input v-model="myName" placeholder="Nhập tên của bạn" maxlength="15" />
             <br><br>
-            <button @click="createRoom" :disabled="!myName">Tạo Phòng (Host)</button>
-            <div style="margin: 10px;">HOẶC</div>
-            <input v-model="joinId" placeholder="Nhập Room ID" />
-            <button @click="joinRoom" :disabled="!myName || !joinId">Vào Phòng</button>
-            <p v-if="loading">Đang kết nối...</p>
+            <button @click="createRoom" :disabled="!myName || loading">Tạo Phòng Mới</button>
+            <div style="margin: 10px; opacity: 0.7;">HOẶC</div>
+            <input v-model="joinId" placeholder="Nhập Mã Phòng" style="text-transform: uppercase;" />
+            <button @click="joinRoom" :disabled="!myName || !joinId || loading">Vào Phòng</button>
+            <p v-if="loading" style="color: #f39c12;">Đang kết nối...</p>
         </div>
 
         <div v-else-if="step === 'lobby'">
-            <h2>Phòng: {{ roomId }}</h2>
-            <p>Gửi ID này cho bạn bè để họ tham gia.</p>
-            <div class="player-box">
-                <h3>Người chơi trong phòng:</h3>
-                <ul>
-                    <li v-for="p in players" :key="p.id">{{ p.name }} {{ p.id === myId ? '(Bạn)' : '' }} <span v-if="p.isHost">👑</span></li>
-                </ul>
+            <h2>Phòng: <span style="color:#f1c40f; font-family: monospace; font-size: 1.5em;">{{ roomId }}</span></h2>
+            <p>Copy mã phòng gửi cho bạn bè</p>
+            
+            <div class="game-area">
+                <h3>Danh sách người chơi ({{ players.length }})</h3>
+                <div v-for="p in players" :key="p.id" class="player-box">
+                    <span>
+                        <span v-if="p.id === hostId">👑</span> 
+                        {{ p.name }} 
+                        <span v-if="p.id === myId" class="me-badge">Bạn</span>
+                    </span>
+                    <span v-if="p.ready" style="color:#2ecc71">Sẵn sàng</span>
+                    <span v-else>Đang chờ...</span>
+                </div>
             </div>
-            <button v-if="isHost" @click="startGame" :disabled="players.length < 2">Bắt đầu Game</button>
-            <p v-else>Chờ chủ phòng bắt đầu...</p>
+
+            <div v-if="isHost">
+                <button @click="startGame" :disabled="players.length < 2">Bắt đầu Game</button>
+                <p v-if="players.length < 2" style="font-size: 0.9em; color: #95a5a6;">Cần ít nhất 2 người để chơi</p>
+            </div>
+            <div v-else>
+                <p>Chờ chủ phòng ({{ hostName }}) bắt đầu...</p>
+            </div>
         </div>
 
         <div v-else-if="step === 'game'">
             <div class="status-log">{{ statusMessage }}</div>
 
             <div class="game-area" v-if="gamePhase === 'picking'">
-                <h3>Pool (Bài chung)</h3>
+                <h3>Bài Chung (Pool)</h3>
                 <div>
                     <div 
                         v-for="(card, index) in pool" 
@@ -66,29 +81,30 @@
             </div>
 
             <div class="game-area">
-                <h3>Bài của bạn ({{ myName }})</h3>
-                <div v-if="myHand.length > 0">
+                <h3>Bài của bạn</h3>
+                <div style="min-height: 100px;">
                     <div 
                         v-for="(card, index) in myHand" 
                         class="card" 
                         :class="{ 'selected': selectedHandIndex === index }"
-                        @click="onHandCardClick(index)">
+                        @click="selectHandCard(index)">
                         {{ card }}
                     </div>
                 </div>
-                
+
                 <div v-if="gamePhase === 'offering'">
-                    <p>Chọn 1 lá bài để Offer (Góp vào Pool)</p>
-                    <button @click="confirmOffer" :disabled="selectedHandIndex === null || hasOffered">
-                        {{ hasOffered ? "Đã Offer Xong" : "I'm done offering" }}
+                    <p>Chọn 1 lá bài để góp vào nêm (Pool)</p>
+                    <button @click="submitOffer" :disabled="selectedHandIndex === null || hasOffered">
+                        {{ hasOffered ? "Đã Góp Xong (Chờ người khác)" : "Góp Bài Này" }}
                     </button>
                 </div>
 
                 <div v-if="gamePhase === 'picking'">
                     <div v-if="isMyTurn">
-                        <p class="turn-indicator">⚡ Tới lượt bạn! Chọn 1 lá từ Pool và 1 lá trên tay để đổi.</p>
-                        <button @click="confirmSwap" :disabled="selectedHandIndex === null || selectedPoolIndex === null">
-                            Đổi bài (Swap)
+                        <p class="turn-indicator">⚡ TỚI LƯỢT BẠN!</p>
+                        <p>Chọn 1 lá trong Pool và 1 lá trên Tay để đổi</p>
+                        <button @click="submitSwap" :disabled="selectedHandIndex === null || selectedPoolIndex === null">
+                            Xác nhận Đổi (Swap)
                         </button>
                     </div>
                     <div v-else>
@@ -97,15 +113,37 @@
                 </div>
             </div>
 
-            <div v-if="isHost && gamePhase === 'offering'" style="margin-top: 20px; border-top: 1px solid white; padding-top:10px;">
-                <h3>Host Control</h3>
-                <p>Đã Offer: {{ offeredCount }} / {{ players.length }} người</p>
-                <button @click="hostLockOffers">Lock Offers & Start Picking</button>
+            <div v-if="isHost && gamePhase === 'offering'" style="margin-top: 20px; border-top: 1px dashed white; padding-top:10px;">
+                <h4>Quyền Chủ Phòng</h4>
+                <p>Đã Góp: {{ offeredCount }} / {{ players.length }}</p>
+                <button @click="hostLockOffers" :disabled="offeredCount < players.length">Khóa Góp & Bắt đầu Đổi</button>
             </div>
         </div>
     </div>
 
-    <script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update, get, remove, onDisconnect } 
+        from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // CẤU HÌNH TỪ ẢNH CỦA BẠN
+        const firebaseConfig = {
+            apiKey: "AIzaSyAfYIW3kg5BZxS9pbXny5JsQGv70VK0DiQ",
+            authDomain: "caonem-5c040.firebaseapp.com",
+            databaseURL: "https://caonem-5c040-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "caonem-5c040",
+            storageBucket: "caonem-5c040.firebasestorage.app",
+            messagingSenderId: "1097973722396",
+            appId: "1:1097973722396:web:bb0b017146a7d974e31ed9",
+            measurementId: "G-EQTSX790Z2"
+        };
+
+        // Khởi tạo Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
         const { createApp } = Vue;
 
         createApp({
@@ -117,296 +155,42 @@
                     myId: '',
                     roomId: '',
                     joinId: '',
-                    isHost: false,
-                    peer: null,
-                    conns: [], // Host lưu danh sách kết nối
-                    hostConn: null, // Client lưu kết nối tới Host
                     
-                    // Game State (Đồng bộ từ Host)
-                    players: [], // {id, name, isHost}
-                    gamePhase: 'offering', // offering, picking
-                    pool: [],
-                    turnIndex: 0,
-                    
-                    // Local State (Riêng tư)
-                    myHand: [],
+                    // Dữ liệu đồng bộ từ Firebase
+                    players: [], // [{id, name, hand:[], tempOffer: null, hasOffered: false}]
+                    gameState: {
+                        hostId: '',
+                        phase: 'lobby', // lobby, offering, picking
+                        pool: [],
+                        turnIndex: 0,
+                        msg: ''
+                    },
+
+                    // Local UI State
                     selectedHandIndex: null,
                     selectedPoolIndex: null,
-                    hasOffered: false,
-                    statusMessage: ''
                 }
             },
             computed: {
-                offeredCount() {
-                    return this.players.filter(p => p.hasOffered).length;
+                isHost() { return this.gameState.hostId === this.myId; },
+                hostName() {
+                    const h = this.players.find(p => p.id === this.gameState.hostId);
+                    return h ? h.name : 'Unknown';
+                },
+                me() { return this.players.find(p => p.id === this.myId) || {}; },
+                myHand() { return this.me.hand || []; },
+                hasOffered() { return this.me.hasOffered || false; },
+                pool() { return this.gameState.pool || []; },
+                gamePhase() { return this.gameState.phase; },
+                statusMessage() { return this.gameState.msg; },
+                currentTurnName() {
+                    if (!this.players.length) return '';
+                    return this.players[this.gameState.turnIndex].name;
                 },
                 isMyTurn() {
-                    if (this.gamePhase !== 'picking' || this.players.length === 0) return false;
-                    return this.players[this.turnIndex].id === this.myId;
+                    if (this.gamePhase !== 'picking') return false;
+                    return this.players[this.gameState.turnIndex].id === this.myId;
                 },
-                currentTurnName() {
-                    if (this.players.length === 0) return '';
-                    return this.players[this.turnIndex].name;
+                offeredCount() {
+                    return this.players.filter(p => p.hasOffered).length;
                 }
-            },
-            methods: {
-                // --- SETUP KẾT NỐI ---
-                initPeer(id = null) {
-                    return new Promise((resolve, reject) => {
-                        // Tạo Peer ID ngẫu nhiên ngắn gọn 1 chút cho dễ test
-                        const peerId = id || Math.random().toString(36).substr(2, 6).toUpperCase();
-                        this.peer = new Peer(peerId);
-                        
-                        this.peer.on('open', (id) => {
-                            this.myId = id;
-                            resolve(id);
-                        });
-
-                        this.peer.on('connection', (conn) => {
-                            if (this.isHost) this.handleHostConnection(conn);
-                        });
-
-                        this.peer.on('error', (err) => {
-                            console.error(err);
-                            alert("Lỗi kết nối: " + err.type);
-                            this.loading = false;
-                        });
-                    });
-                },
-
-                async createRoom() {
-                    this.loading = true;
-                    this.isHost = true;
-                    await this.initPeer();
-                    this.roomId = this.myId;
-                    // Thêm chính mình vào danh sách
-                    this.players.push({ id: this.myId, name: this.myName, isHost: true, hasOffered: false });
-                    this.step = 'lobby';
-                    this.loading = false;
-                },
-
-                async joinRoom() {
-                    this.loading = true;
-                    this.isHost = false;
-                    await this.initPeer(); // Client tự có ID riêng
-                    
-                    // Kết nối tới Host
-                    const conn = this.peer.connect(this.joinId);
-                    
-                    conn.on('open', () => {
-                        this.hostConn = conn;
-                        this.roomId = this.joinId;
-                        
-                        // Gửi thông tin đăng ký
-                        conn.send({ type: 'JOIN', name: this.myName });
-
-                        // Lắng nghe data từ Host
-                        conn.on('data', (data) => {
-                            this.handleClientData(data);
-                        });
-                    });
-
-                    conn.on('error', () => { alert("Không tìm thấy phòng!"); this.loading = false; });
-                },
-
-                // --- HOST LOGIC (Xử lý Server) ---
-                handleHostConnection(conn) {
-                    this.conns.push(conn);
-                    
-                    conn.on('data', (data) => {
-                        // Xử lý các hành động từ Client gửi lên
-                        switch(data.type) {
-                            case 'JOIN':
-                                this.players.push({ id: conn.peer, name: data.name, isHost: false, hasOffered: false });
-                                this.broadcastState();
-                                break;
-                            case 'OFFER_CARD':
-                                // Lưu tạm lá bài client offer (chưa đưa vào pool ngay)
-                                const pOffer = this.players.find(p => p.id === conn.peer);
-                                if(pOffer) {
-                                    pOffer.tempOffer = data.card;
-                                    pOffer.hasOffered = true;
-                                }
-                                this.broadcastState();
-                                break;
-                            case 'SWAP_CARD':
-                                if (this.players[this.turnIndex].id === conn.peer) {
-                                    this.processSwap(conn.peer, data.poolIdx, data.handCard);
-                                }
-                                break;
-                        }
-                    });
-
-                    conn.on('close', () => {
-                        this.players = this.players.filter(p => p.id !== conn.peer);
-                        this.broadcastState();
-                    });
-                },
-
-                broadcastState() {
-                    // Dữ liệu gửi cho TẤT CẢ (Public state)
-                    const publicState = {
-                        type: 'UPDATE_STATE',
-                        step: this.step,
-                        players: this.players.map(p => ({ id: p.id, name: p.name, isHost: p.isHost, hasOffered: p.hasOffered })),
-                        gamePhase: this.gamePhase,
-                        pool: this.pool,
-                        turnIndex: this.turnIndex
-                    };
-
-                    // Gửi cho từng client
-                    this.conns.forEach(conn => conn.send(publicState));
-                    
-                    // Host tự cập nhật UI của mình (vì host không nhận data qua mạng)
-                    // Host logic chạy trực tiếp trên biến data của Vue, nên không cần làm gì thêm với public data
-                    // NHƯNG cần cập nhật các biến local nếu cần. Ở đây ta dùng chung data.
-                },
-
-                broadcastHand(playerId, hand) {
-                    if (playerId === this.myId) {
-                        this.myHand = hand;
-                    } else {
-                        const conn = this.conns.find(c => c.peer === playerId);
-                        if (conn) conn.send({ type: 'YOUR_HAND', hand: hand });
-                    }
-                },
-
-                startGame() {
-                    // Chia bài
-                    const deck = ['A','2','3','4','5','6','7','8','9','10','J','Q','K', 'A','2','3','4','5','6','7','8','9','10','J','Q','K']; // Deck đơn giản
-                    
-                    this.players.forEach(p => {
-                        const hand = [];
-                        for(let i=0; i<3; i++) {
-                            const rand = Math.floor(Math.random() * deck.length);
-                            hand.push(deck[rand]);
-                        }
-                        this.broadcastHand(p.id, hand);
-                        p.hasOffered = false;
-                        p.tempOffer = null;
-                    });
-
-                    this.gamePhase = 'offering';
-                    this.step = 'game';
-                    this.statusMessage = "Mọi người hãy chọn 1 lá bài để Offer!";
-                    this.broadcastState();
-                },
-
-                hostLockOffers() {
-                    // Gom bài offer vào Pool
-                    this.players.forEach(p => {
-                        if(p.tempOffer) {
-                            this.pool.push(p.tempOffer);
-                            p.tempOffer = null; // Clear temp
-                            
-                            // Cần xóa lá bài đó khỏi tay người chơi (Logic này Host phải quản lý hoặc tin tưởng Client)
-                            // Để đơn giản: Host đã nhận "giá trị" lá bài, Client tự xóa hiển thị. 
-                            // Đúng ra Host nên giữ 'Server Authoritative' toàn bộ Hand, nhưng để code ngắn gọn, ta xử lý bán tin cậy.
-                        }
-                    });
-                    
-                    this.gamePhase = 'picking';
-                    this.turnIndex = 0;
-                    this.statusMessage = "Đã khóa Offer! Bắt đầu lượt Pick.";
-                    this.broadcastState();
-                },
-
-                processSwap(playerId, poolIdx, handCard) {
-                    // Host thực hiện logic đổi bài
-                    const cardFromPool = this.pool[poolIdx];
-                    
-                    // Cập nhật Pool: Thay lá từ pool bằng lá từ tay người chơi trả lại
-                    this.pool[poolIdx] = handCard;
-                    
-                    // Gửi lá bài mới về cho người chơi
-                    // Người chơi tự cập nhật UI tay mình, Host chỉ cần confirm state
-                    
-                    // Chuyển lượt
-                    this.turnIndex = (this.turnIndex + 1) % this.players.length;
-                    this.broadcastState();
-
-                    // Gửi tin nhắn riêng cho người chơi để họ cập nhật Hand chính thức (swap thành công)
-                    if(playerId === this.myId) {
-                        this.handleSwapSuccess(cardFromPool);
-                    } else {
-                        const conn = this.conns.find(c => c.peer === playerId);
-                        if(conn) conn.send({ type: 'SWAP_SUCCESS', newCard: cardFromPool });
-                    }
-                },
-
-                // --- CLIENT LOGIC ---
-                handleClientData(data) {
-                    if (data.type === 'UPDATE_STATE') {
-                        this.players = data.players;
-                        this.gamePhase = data.gamePhase;
-                        this.pool = data.pool;
-                        this.turnIndex = data.turnIndex;
-                        if(data.step) this.step = data.step;
-                        this.loading = false;
-                    } 
-                    else if (data.type === 'YOUR_HAND') {
-                        this.myHand = data.hand;
-                        this.hasOffered = false;
-                        this.selectedHandIndex = null;
-                    }
-                    else if (data.type === 'SWAP_SUCCESS') {
-                        this.handleSwapSuccess(data.newCard);
-                    }
-                },
-
-                // --- GAMEPLAY UI ACTIONS ---
-                onHandCardClick(index) {
-                    this.selectedHandIndex = index;
-                },
-                
-                selectPoolCard(index) {
-                    if(this.gamePhase === 'picking' && this.isMyTurn) {
-                        this.selectedPoolIndex = index;
-                    }
-                },
-
-                confirmOffer() {
-                    if (this.selectedHandIndex === null) return;
-                    const card = this.myHand[this.selectedHandIndex];
-                    
-                    // Gửi lên Host
-                    if (this.isHost) {
-                        const me = this.players.find(p => p.id === this.myId);
-                        me.tempOffer = card;
-                        me.hasOffered = true;
-                        this.broadcastState();
-                    } else {
-                        this.hostConn.send({ type: 'OFFER_CARD', card: card });
-                    }
-
-                    // Xóa khỏi tay mình (UI)
-                    this.myHand.splice(this.selectedHandIndex, 1);
-                    this.hasOffered = true;
-                    this.selectedHandIndex = null;
-                },
-
-                confirmSwap() {
-                    const cardToGive = this.myHand[this.selectedHandIndex];
-                    
-                    if (this.isHost) {
-                        this.processSwap(this.myId, this.selectedPoolIndex, cardToGive);
-                    } else {
-                        this.hostConn.send({ 
-                            type: 'SWAP_CARD', 
-                            poolIdx: this.selectedPoolIndex, 
-                            handCard: cardToGive 
-                        });
-                    }
-                },
-
-                handleSwapSuccess(newCard) {
-                    // Thay thế lá bài trên tay (lá cũ đã gửi đi, giờ nhận lá mới vào vị trí đó)
-                    this.myHand[this.selectedHandIndex] = newCard;
-                    this.selectedHandIndex = null;
-                    this.selectedPoolIndex = null;
-                }
-            }
-        });
-    </script>
-</body>
-</html>
